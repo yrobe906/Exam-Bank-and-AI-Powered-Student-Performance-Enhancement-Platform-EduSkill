@@ -1,0 +1,2 @@
+# Exam-Bank-and-AI-Powered-Student-Performance-Enhancement-Platform-EduSkill
+EduSkill is a centralized web-based platform designed to enhance exam preparation by addressing the limitations of traditional paper-based learning systems. It provides students with organized digital resources, including exam banks, mock tests, flashcards, and downloadable past papers in a single platform. this system is applicable for highschool.
