@@ -1,0 +1,11 @@
+# TODO: Fix AdminAddLibrary.vue Issues
+
+## Issues to Fix:
+1. [ ] Add admin login endpoint to `app/routers/admin_router.py`
+2. [ ] Fix resource router path in `app/routers/resource_router.py` (change prefix from "/resources" to "")
+3. [ ] Fix frontend admin login path in `../Frontend/src/pages/Admin/AdminLogin.vue`
+
+## Implementation Steps:
+1. Add `/login` endpoint to admin_router.py that validates credentials and returns JWT token
+2. Fix the resource router prefix to prevent double prefix issue
+3. Update the frontend to call the correct API path

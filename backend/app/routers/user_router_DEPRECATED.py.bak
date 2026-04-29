@@ -1,0 +1,223 @@
+from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import Optional
+from datetime import datetime
+import shutil
+from pathlib import Path
+from jose import jwt
+import os
+
+from app.models.user_models import User
+from app.utils.hashing import hash_password, verify_password
+from database import get_db
+from app.auth import get_current_user
+
+# JWT settings
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+ALGORITHM = "HS256"
+
+router = APIRouter(prefix="/api/users", tags=["Users"])
+
+UPLOAD_DIR = Path("uploads/users")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+@router.post("/register")
+async def register_user(
+    full_name: str = Form(...),
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    role: str = Form(...),
+    gender: str = Form(...),
+    school_id: str = Form(None),
+    grade: Optional[int] = Form(None),
+    phone: str = Form(None),
+    school_name: str = Form(None),
+    subject_assigned: str = Form(None),
+    teaching_grade: Optional[int] = Form(None),
+    woreda: str = Form(None),
+    school_supervising: str = Form(None),
+    profile_photo: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    if db.query(User).filter((User.email == email) | (User.username == username)).first():
+        raise HTTPException(status_code=400, detail="Email or Username already exists")
+
+    ext = profile_photo.filename.split(".")[-1]
+    photo_path = UPLOAD_DIR / f"{username}_{int(datetime.utcnow().timestamp())}.{ext}"
+    with open(photo_path, "wb") as buffer:
+        shutil.copyfileobj(profile_photo.file, buffer)
+
+    user = User(
+        full_name=full_name.strip(),
+        username=username.strip(),
+        email=email.lower().strip(),
+        password_hash=hash_password(password),
+        role=role,
+        gender=gender.lower(),
+        school_id=school_id,
+        grade=grade,
+        phone=phone,
+        school_name=school_name,
+        subject_assigned=subject_assigned,
+        teaching_grade=teaching_grade,
+        woreda=woreda,
+        school_supervising=school_supervising,
+        profile_photo=str(photo_path),
+        status="pending",
+        created_at=datetime.utcnow()
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return {"message": "Registration submitted. Waiting for admin approval."}
+
+@router.post("/login")
+def login_user(
+    username_or_email: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(
+        (User.username == username_or_email) | 
+        (User.email == username_or_email.lower())
+    ).first()
+
+    if not user or not verify_password(password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if user.status == "pending":
+        return {
+            "status": "pending",
+            "username": user.username,
+            "message": "Your account is pending approval"
+        }
+
+    if user.status == "rejected":
+        return {
+            "status": "rejected",
+            "username": user.username,
+            "message": "Your account was rejected"
+        }
+
+    token_data = {
+        "sub": str(user.id),
+        "username": user.username,
+        "role": user.role
+    }
+    
+    access_token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
+    
+    return {
+        "message": "Login successful",
+        "token": access_token,
+        "role": user.role,
+        "username": user.username,
+        "user_id": user.id,
+        "full_name": user.full_name,
+        "school_id": user.school_id,
+        "profile_photo": user.profile_photo,
+        "email": getattr(user, 'email', None),
+        "phone": getattr(user, 'phone', None),
+        "grade": getattr(user, 'grade', None),
+        "subject_assigned": getattr(user, 'subject_assigned', None)
+    }
+
+@router.get("/profile")
+def get_current_user_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get current logged-in user's profile"""
+    return {
+        "id": current_user.id,
+        "full_name": current_user.full_name,
+        "username": current_user.username,
+        "role": current_user.role,
+        "profile_photo": current_user.profile_photo,
+        "email": getattr(current_user, 'email', None),
+        "phone": getattr(current_user, 'phone', None),
+        "grade": getattr(current_user, 'grade', None),
+        "subject_assigned": getattr(current_user, 'subject_assigned', None),
+        "school_id": getattr(current_user, 'school_id', None),
+        "school_name": getattr(current_user, 'school_name', None),
+        "teaching_grade": getattr(current_user, 'teaching_grade', None),
+        "status": current_user.status
+    }
+
+@router.put("/profile")
+def update_user_profile(
+    full_name: Optional[str] = Form(None),
+    username: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    grade: Optional[int] = Form(None),
+    subject_assigned: Optional[str] = Form(None),
+    school_id: Optional[str] = Form(None),
+    current_password: Optional[str] = Form(None),
+    new_password: Optional[str] = Form(None),
+    profile_photo: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.crud.user_crud import update_user
+    from app.utils.hashing import verify_password, hash_password
+
+    # USER-EDIT ALLOWANCE: Users can edit own profile, admins can edit any
+    if current_user.role != "admin" and username and username != current_user.username:
+        raise HTTPException(status_code=403, detail="Cannot change username - admin only")
+
+    update_data = {}
+    
+    if full_name:
+        update_data['full_name'] = full_name.strip()
+    if username:
+        update_data['username'] = username.strip()
+    if school_id:
+        update_data['school_id'] = school_id
+    if grade is not None:
+        update_data['grade'] = grade
+    if phone:
+        update_data['phone'] = phone
+    if subject_assigned:
+        update_data['subject_assigned'] = subject_assigned
+    if email:
+        update_data['email'] = email
+
+    if profile_photo and profile_photo.filename:
+        ext = profile_photo.filename.split('.')[-1]
+        photo_filename = f"{current_user.username}_{int(datetime.utcnow().timestamp())}.{ext}"
+        photo_path = UPLOAD_DIR / photo_filename
+        with open(photo_path, "wb") as f:
+            shutil.copyfileobj(profile_photo.file, f)
+        update_data['profile_photo'] = str(photo_path)
+    
+    if new_password:
+        if not current_password:
+            raise HTTPException(status_code=400, detail="Current password required")
+        if not verify_password(current_password, current_user.password_hash):
+            raise HTTPException(status_code=400, detail="Current password incorrect")
+        update_data['password_hash'] = hash_password(new_password)
+
+    updated_user = update_user(db, current_user, update_data, current_user.role)
+    
+    return {
+        "message": "Profile updated successfully",
+        "user": {
+            "id": updated_user.id,
+            "full_name": updated_user.full_name,
+            "username": updated_user.username,
+            "role": updated_user.role,
+            "profile_photo": updated_user.profile_photo,
+            "email": getattr(updated_user, "email", None),
+            "phone": getattr(updated_user, "phone", None),
+            "grade": getattr(updated_user, "grade", None),
+            "subject_assigned": getattr(updated_user, "subject_assigned", None)
+        }
+    }
+
+# Clean deprecated file - no more errors
+print("✅ user_router_DEPRECATED.py fixed and clean")
+

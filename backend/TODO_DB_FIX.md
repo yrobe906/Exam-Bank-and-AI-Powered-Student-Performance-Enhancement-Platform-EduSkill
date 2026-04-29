@@ -1,0 +1,1 @@
+# Fix User Login DB Schema Error\nStatus: In Progress\n\n## Steps:\n- [x] Create TODO_DB_FIX.md\n- [ ] Add missing DB columns via psql\n- [ ] Restart server\n- [ ] Test POST /api/users/login\n- [ ] Complete

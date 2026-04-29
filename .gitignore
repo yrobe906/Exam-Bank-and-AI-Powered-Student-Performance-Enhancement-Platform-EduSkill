@@ -1,0 +1,71 @@
+# =========================
+# General OS files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+
+# =========================
+# Environment variables
+# =========================
+.env
+.env.*
+
+# =========================
+# IDEs
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# Backend (FastAPI / Python)
+# =========================
+backend/__pycache__/
+backend/*.py[cod]
+backend/*$py.class
+
+backend/.venv/
+backend/venv/
+backend/env/
+backend/python-env/
+
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.coverage
+backend/htmlcov/
+
+backend/*.log
+
+backend/*.db
+backend/*.sqlite3
+backend/*.db-journal
+backend/database.db
+backend/issms.db
+
+backend/build/
+backend/dist/
+backend/*.egg-info/
+backend/uploads/
+
+# =========================
+# Frontend (Vue / Node.js)
+# =========================
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+frontend/.env
+frontend/.env.*
+
+frontend/.cache/
+frontend/.vite/
+frontend/.parcel-cache/
+frontend/.eslintcache
+
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
